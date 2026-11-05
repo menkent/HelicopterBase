@@ -61,6 +61,7 @@ export class GameScene extends Phaser.Scene {
       return { ...s, img, ring, taken: false, baseScale: img.scale };
     });
     this.fuelRing = this.add.graphics().setDepth(DEPTH.base + 1);
+    this.storeBlink = this.add.graphics().setDepth(DEPTH.base + 1); // мигающая рамка склада, пока предмет не взят
     this.boardMedals = {};
     MISSION_ORDER.forEach((id, i) => {
       if (this.save.medals.includes(id)) this.placeMedal(id, i);
@@ -217,7 +218,13 @@ export class GameScene extends Phaser.Scene {
       sfx.ready();
     }
     if (this.ready && !inBase(h.x, h.y)) this.toFlight();
-    if (!this.item) return WAREHOUSE.center;
+    this.storeBlink.clear();
+    if (!this.item) {
+      const a = 0.35 + 0.65 * Math.abs(Math.sin(this.stateT * 4));
+      const r = WAREHOUSE.rect;
+      this.storeBlink.lineStyle(16, 0xffd43b, a).strokeRoundedRect(r.x - 10, r.y - 10, r.w + 20, r.h + 20, 26);
+      return null;
+    }
     if (this.fuel < 1) return FUEL;
     return SITES[this.missionId];
   }
@@ -244,6 +251,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   toFlight() {
+    this.storeBlink.clear();
     this.setState('flight');
     this.heli.maxSpeed = SPEED.map;
     const cam = this.cameras.main;

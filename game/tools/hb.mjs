@@ -25,7 +25,7 @@ export async function openGame({ query = 'test=1', port = 8765, w = 1920, h = 10
 }
 
 /** Нажимать кнопку, пока игра не перейдёт в состояние state (нажатие может потеряться, пока окно ещё не принимает ввод). */
-export async function tapUntilState(g, state, tries = 20) {
+export async function tapUntilState(g, state, tries = 60) {
   for (let i = 0; i < tries && (await g.hb('__hb.state()')) !== state; i++) { await g.hb('__hb.tap()'); await g.wait(300); }
   return (await g.hb('__hb.state()')) === state;
 }

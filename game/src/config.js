@@ -24,6 +24,7 @@ export const ITEMS = {
 export const PAD = { ...L(900, 560), r: 150 };
 export const WAREHOUSE = {
   center: L(250, 500),
+  rect: { ...L(70, 80), w: 360, h: 840 },
   slots: ITEM_ORDER.map((key, i) => ({ key, ...L(250, 215 + i * 140) })),
 };
 export const FUEL = { ...L(1600, 620), r: 100 };
