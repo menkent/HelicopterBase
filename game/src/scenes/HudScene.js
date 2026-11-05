@@ -1,4 +1,5 @@
 import { FONT, MISSION_META, VIEW } from '../config.js';
+import { sfx } from '../sfx.js';
 
 const TXT = (size, color = '#3b3640') => ({ fontFamily: FONT, fontSize: `${size}px`, fontStyle: 'bold', color });
 
@@ -56,7 +57,7 @@ export class HudScene extends Phaser.Scene {
 
   panel(w, h, color) {
     const o = this.overlay;
-    o.removeAll(true);
+    this.clearOverlay();
     const g = this.add.graphics();
     g.fillStyle(0x000000, 0.45).fillRect(0, 0, VIEW.w, VIEW.h);
     const x = (VIEW.w - w) / 2, y = (VIEW.h - h) / 2;
@@ -72,30 +73,136 @@ export class HudScene extends Phaser.Scene {
     this.tweens.add({ targets: o, alpha: 1, duration: 250 });
   }
 
-  showDispatch(id) {
-    const m = MISSION_META[id];
-    const { x, y } = this.panel(1320, 760, m.color);
+  /** Кнопка A, которая появляется с задержкой и пульсирует — «жми, чтобы дальше». */
+  addNextButton(x, y, delay = 500) {
+    const btn = this.add.image(x, y, 'btn_a').setDisplaySize(140, 140).setAlpha(0);
+    this.overlay.add(btn);
+    const s = btn.scale;
+    this.tweens.add({ targets: btn, alpha: 1, delay, duration: 250 });
+    this.tweens.add({ targets: btn, scale: s * 1.15, delay, duration: 450, yoyo: true, repeat: -1 });
+  }
+
+  clearOverlay() {
+    this.tweens.killTweensOf(this.overlay.list);
+    this.overlay.removeAll(true);
+  }
+
+  /** Заставка при запуске. */
+  showTitle() {
+    this.clearOverlay();
     const o = this.overlay;
-    o.add(this.add.text(VIEW.w / 2, y + 70, m.title, TXT(60, m.css)).setOrigin(0.5));
-    const av = this.add.image(x + 230, y + 400, 'dispatcher').setDisplaySize(330, 330);
-    o.add(av);
-    this.tweens.add({ targets: av, angle: { from: -3, to: 3 }, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    const card = this.add.image(x + 760, y + 330, 'card_' + id).setDisplaySize(620, 354);
-    o.add(card);
     const g = this.add.graphics();
-    g.fillStyle(m.color, 0.12).fillRoundedRect(x + 520, y + 540, 480, 190, 40);
+    g.fillStyle(0xfff0f6, 0.93).fillRect(0, 0, VIEW.w, VIEW.h);
     o.add(g);
-    o.add(this.add.text(x + 560, y + 635, 'ВОЗЬМИ', TXT(40, m.css)).setOrigin(0, 0.5));
-    const it = this.add.image(x + 880, y + 635, 'item_' + m.item).setDisplaySize(170, 170);
-    o.add(it);
-    this.tweens.add({ targets: it, scale: it.scale * 1.1, duration: 500, yoyo: true, repeat: -1 });
-    const btn = this.add.image(x + 1190, y + 640, 'btn_a').setDisplaySize(140, 140);
-    o.add(btn);
-    this.tweens.add({ targets: btn, scale: btn.scale * 1.15, duration: 450, yoyo: true, repeat: -1 });
+    o.add(this.add.text(VIEW.w / 2, 210, 'Вертолётная база спасения', TXT(96, '#d6336c')).setOrigin(0.5).setStroke('#fff', 14));
+    const cx = VIEW.w / 2, cy = 600, R = 200;
+    const body = this.add.image(cx, cy, 'heli').setOrigin(0.55, 0.5).setDisplaySize(300, 300);
+    const rotor = this.add.image(cx, cy, 'rotor').setDisplaySize(350, 350);
+    o.add([body, rotor]);
+    const st = { a: 0 };
+    this.tweens.add({
+      targets: st, a: Math.PI * 2, duration: 6000, repeat: -1,
+      onUpdate: () => {
+        const x = cx + Math.cos(st.a) * R * 1.6, y = cy + Math.sin(st.a) * R * 0.6;
+        body.setPosition(x, y).setRotation(st.a + Math.PI / 2);
+        rotor.setPosition(x, y).setRotation(rotor.rotation + 0.5);
+      },
+    });
+    this.addNextButton(VIEW.w / 2, 940, 300);
     this.popIn();
   }
 
-  hideDispatch() { this.overlay.setVisible(false); this.overlay.removeAll(true); }
+  /** Сценка выдачи задания: 0 — вызов, 1 — что случилось, 2 — что взять. */
+  showDispatchStep(id, step) {
+    const m = MISSION_META[id];
+    this.clearOverlay();
+    const o = this.overlay;
+    const W = 1320, H = 760, x = (VIEW.w - W) / 2, y = (VIEW.h - H) / 2;
+    const g = this.add.graphics();
+    g.fillStyle(0x000000, 0.45).fillRect(0, 0, VIEW.w, VIEW.h);
+    g.fillStyle(0xffffff, 1).fillRoundedRect(x, y, W, H, 44);
+    g.lineStyle(14, step === 0 ? 0x7048e8 : m.color, 1).strokeRoundedRect(x, y, W, H, 44);
+    o.add(g);
+
+    if (step === 0) {
+      o.add(this.add.text(VIEW.w / 2, y + 75, 'Вызов!', TXT(72, '#7048e8')).setOrigin(0.5));
+      const ax = VIEW.w / 2 - 60, ay = y + 420;
+      for (let i = 0; i < 3; i++) {
+        const ring = this.add.graphics();
+        ring.lineStyle(10, 0x7048e8, 1).strokeCircle(0, 0, 220);
+        ring.setPosition(ax, ay).setScale(0.7).setAlpha(0);
+        o.add(ring);
+        this.tweens.add({ targets: ring, scale: 1.4, alpha: { from: 0.8, to: 0 }, duration: 1500, delay: i * 500, repeat: -1 });
+      }
+      const av = this.add.image(ax, ay, 'dispatcher').setDisplaySize(380, 380);
+      o.add(av);
+      this.tweens.add({ targets: av, y: ay - 18, duration: 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      const bub = this.add.container(ax + 260, ay - 150);
+      const bg = this.add.graphics();
+      bg.fillStyle(0xffffff, 1).fillCircle(0, 0, 80).lineStyle(8, 0xf03e3e, 1).strokeCircle(0, 0, 80);
+      bg.fillStyle(0xffffff, 1).fillTriangle(-60, 40, -30, 70, -110, 110);
+      bub.add([bg, this.add.text(0, 4, '!', TXT(120, '#f03e3e')).setOrigin(0.5)]);
+      o.add(bub);
+      this.tweens.add({ targets: bub, angle: { from: -10, to: 10 }, duration: 220, yoyo: true, repeat: -1 });
+    } else {
+      o.add(this.add.text(VIEW.w / 2, y + 75, step === 1 ? m.title : 'Что взять?', TXT(64, m.css)).setOrigin(0.5));
+      const ax = x + 230, ay = y + 440;
+      const av = this.add.image(ax, ay, 'dispatcher').setDisplaySize(300, 300);
+      o.add(av);
+      this.tweens.add({ targets: av, angle: { from: -4, to: 4 }, duration: 260, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      if (step === 1) {
+        const bx = x + 470, by = y + 150, bw = 780, bh = 470;
+        const bg = this.add.graphics();
+        bg.fillStyle(0xffffff, 1).fillRoundedRect(bx, by, bw, bh, 36).lineStyle(8, m.color, 1).strokeRoundedRect(bx, by, bw, bh, 36);
+        bg.fillStyle(0xffffff, 1).fillTriangle(bx + 6, by + 260, bx + 6, by + 340, bx - 70, by + 330);
+        bg.lineStyle(8, m.color, 1).lineBetween(bx, by + 260, bx - 70, by + 330).lineBetween(bx - 70, by + 330, bx, by + 340);
+        o.add(bg);
+        const card = this.add.image(bx + bw / 2, by + bh / 2, 'card_' + id).setDisplaySize(700, 400);
+        const s = card.scale;
+        card.setScale(0);
+        o.add(card);
+        this.tweens.add({ targets: card, scale: s, duration: 600, ease: 'Back.easeOut' });
+        this.tweens.add({ targets: card, angle: { from: -1.5, to: 1.5 }, delay: 600, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      } else {
+        o.add(this.add.image(x + 1080, y + 230, 'card_' + id).setDisplaySize(300, 172));
+        const cx = x + 720, cy = y + 450;
+        const ring = this.add.graphics();
+        ring.fillStyle(m.color, 0.12).fillCircle(cx, cy, 190).lineStyle(8, m.color, 0.6).strokeCircle(cx, cy, 190);
+        o.add(ring);
+        o.add(this.add.text(cx, cy - 235, 'ВОЗЬМИ', TXT(44, m.css)).setOrigin(0.5));
+        const it = this.add.image(ax, ay, 'item_' + m.item).setDisplaySize(60, 60);
+        o.add(it);
+        const big = 300 / it.width;
+        this.tweens.add({
+          targets: it, x: cx, y: cy, scale: big, angle: 360, duration: 800, ease: 'Back.easeOut', delay: 200,
+          onComplete: () => {
+            sfx.ding();
+            const em = this.add.particles(cx, cy, 'dot', {
+              speed: { min: 150, max: 420 }, lifespan: 700, scale: { start: 1.6, end: 0 },
+              tint: [0xffd43b, 0xffffff, m.color], emitting: false,
+            }).setDepth(11);
+            em.explode(26);
+            this.time.delayedCall(900, () => em.destroy());
+            this.tweens.add({ targets: it, scale: big * 1.08, duration: 500, yoyo: true, repeat: -1 });
+          },
+        });
+      }
+    }
+    this.addNextButton(x + W - 120, y + H - 110, step === 2 ? 1000 : 500);
+    if (!this.overlay.visible) this.popIn();
+  }
+
+  /** Карточка задания улетает из центра в правый верхний угол. */
+  flyCardToCorner(id) {
+    const card = this.add.image(VIEW.w / 2, VIEW.h / 2, 'card_' + id).setDisplaySize(560, 320).setDepth(12);
+    this.tweens.add({
+      targets: card, x: VIEW.w - 24 - 330 + 14 + 84, y: 20 + 14 + 48, displayWidth: 168, displayHeight: 96,
+      duration: 650, ease: 'Sine.easeInOut',
+      onComplete: () => { card.destroy(); this.showMission(id); },
+    });
+  }
+
+  hideDispatch() { this.overlay.setVisible(false); this.clearOverlay(); }
 
   showReward(id) {
     const m = MISSION_META[id];

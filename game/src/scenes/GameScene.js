@@ -48,7 +48,7 @@ export class GameScene extends Phaser.Scene {
     this.scene.launch('hud');
     this.hud = this.scene.get('hud');
     this.installDebug();
-    this.time.delayedCall(150, () => this.toDispatch());
+    this.time.delayedCall(150, () => this.toTitle());
   }
 
   setState(s) { this.state = s; this.stateT = 0; }
@@ -100,6 +100,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ---------- этапы ----------
+  toTitle() {
+    this.hud.showTitle();
+    this.setState('title');
+  }
+
   toDispatch() {
     const forced = PARAMS.get('mission');
     this.missionId = forced && MISSION_META[forced] && !this.usedForced ? forced : Save.pickNext(this.save);
@@ -115,7 +120,9 @@ export class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     cam.stopFollow(); cam.pan(BASE_CAM.x, BASE_CAM.y, 600, 'Sine.easeInOut', true); cam.zoomTo(ZOOM.base, 600, 'Sine.easeInOut', true);
     this.hud.setItem(null); this.hud.setFuel(0); this.hud.hideMission(); this.hud.hideContinue();
-    this.hud.showDispatch(this.missionId);
+    this.dispatchStep = 0;
+    this.callT = 0;
+    this.hud.showDispatchStep(this.missionId, 0);
     sfx.call();
     this.setState('dispatch');
   }
@@ -130,13 +137,32 @@ export class GameScene extends Phaser.Scene {
     const h = this.heli;
     let guide = null;
     switch (this.state) {
-      case 'dispatch':
-        if (this.stateT > 0.6 && this.inp.actionPressed()) {
-          sfx.click();
+      case 'title':
+        if (this.stateT > 0.5 && this.inp.actionPressed()) {
+          sfx.unlock(); sfx.click();
           this.hud.hideDispatch();
-          this.hud.showMission(this.missionId);
-          h.locked = false;
-          this.setState('prep');
+          this.toDispatch();
+        }
+        break;
+      case 'dispatch':
+        // сценка из 3 шагов: вызов -> что случилось -> что взять; каждый шаг — кнопкой
+        if (this.dispatchStep === 0) {
+          this.callT += dt;
+          if (this.callT > 1.6) { this.callT = 0; sfx.call(); }
+        }
+        if (this.stateT > 0.6 && this.inp.actionPressed()) {
+          this.dispatchStep += 1;
+          this.stateT = 0;
+          if (this.dispatchStep < 3) {
+            sfx.pop();
+            this.hud.showDispatchStep(this.missionId, this.dispatchStep);
+          } else {
+            sfx.whoosh();
+            this.hud.hideDispatch();
+            this.hud.flyCardToCorner(this.missionId);
+            h.locked = false;
+            this.setState('prep');
+          }
         }
         break;
       case 'prep': guide = this.updatePrep(dt); break;
