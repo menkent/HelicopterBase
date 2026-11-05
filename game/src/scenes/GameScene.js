@@ -37,7 +37,7 @@ export class GameScene extends Phaser.Scene {
     this.heli.bounds = BASE_INNER;
 
     const cam = this.cameras.main;
-    cam.setBounds(0, 0, WORLD.w, WORLD.h).setZoom(ZOOM.base).centerOn(BASE_CAM.x, BASE_CAM.y);
+    cam.setBounds(-WORLD.pad, -WORLD.pad, WORLD.w + 2 * WORLD.pad, WORLD.h + 2 * WORLD.pad).setZoom(ZOOM.base).centerOn(BASE_CAM.x, BASE_CAM.y);
 
     this.siteRing = this.add.graphics().setDepth(DEPTH.fx);
     this.siteIcon = this.add.image(0, 0, 'medal_fire').setDepth(DEPTH.fx).setVisible(false);
@@ -258,7 +258,11 @@ export class GameScene extends Phaser.Scene {
     const site = SITES[this.missionId];
     this.setState('mission');
     this.heli.maxSpeed = SPEED.site;
-    this.cameras.main.zoomTo(ZOOM.site, 700, 'Sine.easeInOut', true);
+    // в зоне миссии камера центрируется на месте (зум не меняется)
+    const cam = this.cameras.main;
+    cam.stopFollow();
+    cam.pan(site.x, site.y, 800, 'Sine.easeInOut', true);
+    cam.zoomTo(ZOOM.site, 700, 'Sine.easeInOut', true);
     if (!this.run) {
       this.ctx = this.makeCtx(site);
       try { this.run = MISSIONS[this.missionId].start(this.ctx); } catch (e) { console.error(e); this.ctx.done(); }
@@ -278,7 +282,10 @@ export class GameScene extends Phaser.Scene {
       this.run = null;
       this.setState('flight');
       this.heli.maxSpeed = SPEED.map;
-      this.cameras.main.zoomTo(ZOOM.map, 700, 'Sine.easeInOut', true);
+      const cam = this.cameras.main;
+      cam.startFollow(this.heli.body, false, 0.05, 0.05);
+      cam.zoomTo(ZOOM.map, 700, 'Sine.easeInOut', true);
+      this.time.delayedCall(900, () => cam.setLerp(0.08, 0.08));
       return PAD;
     }
     return this.missionDone ? PAD : this.ctxGuide;
@@ -323,7 +330,13 @@ export class GameScene extends Phaser.Scene {
     this.patients.push({ bed, obj });
     obj.setDepth(DEPTH.base + 3);
     if (obj.setRotation) obj.setRotation(0);
-    this.tweens.add({ targets: obj, x: bed.x, y: bed.y, duration: 1200, ease: 'Sine.easeInOut' });
+    // пациент любого размера ложится на кровать ~110px
+    const b = obj.getBounds ? obj.getBounds() : null;
+    const k = b && b.width > 0 ? 110 / Math.max(b.width, b.height) : 1;
+    this.tweens.add({
+      targets: obj, x: bed.x, y: bed.y + 20, scaleX: obj.scaleX * k, scaleY: obj.scaleY * k,
+      duration: 1200, ease: 'Sine.easeInOut',
+    });
   }
 
   flyMedal(id) {
@@ -418,6 +431,7 @@ export class GameScene extends Phaser.Scene {
         self.run = null; self.ctx = null; self.missionDone = false; self.ctxGuide = null;
         self.item = self.meta.item; self.fuel = 1; self.ready = true;
         const h = self.heli;
+        const old = h.releaseCarried(); if (old) old.destroy();
         h.locked = false; h.landing = false; h.alt = 1; h.bounds = null; h.boundsCircle = null; h.maxSpeed = SPEED.map;
         h.setItem(self.item);
         self.hud.setItem(self.item); self.hud.setFuel(1); self.hud.showMission(id);

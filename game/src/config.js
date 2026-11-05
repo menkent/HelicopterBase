@@ -3,7 +3,8 @@ export const PARAMS = new URLSearchParams(location.search);
 export const TEST = PARAMS.has('test');
 
 export const VIEW = { w: 1920, h: 1080 };
-export const WORLD = { w: 7000, h: 5000 };
+// pad — поле вокруг мира: камера туда заглядывает (чтобы места у края можно было показать по центру), вертолёт — нет
+export const WORLD = { w: 7000, h: 5000, pad: 900 };
 export const FONT = "'PT Sans','Helvetica Neue',Arial,sans-serif";
 
 // База: прямоугольник 1800x1000, при зуме 1 целиком помещается на экран 1920x1080
@@ -44,7 +45,7 @@ export const MISSION_META = {
   fire: { title: 'Пожар в лесу', item: 'water', color: 0xf03e3e, css: '#f03e3e' },
   mountain: { title: 'Спасение в горах', item: 'rope', color: 0x7048e8, css: '#7048e8' },
   garden: { title: 'Засуха в саду', item: 'seeds', color: 0x37b24d, css: '#37b24d' },
-  sea: { title: 'Спасение на воде', item: 'buoy', color: 0x1c7ed6, css: '#1c7ed6' },
+  sea: { title: 'Спасение на озере', item: 'buoy', color: 0x1c7ed6, css: '#1c7ed6' },
   night: { title: 'Ночная миссия', item: 'light', color: 0x364fc7, css: '#364fc7' },
 };
 

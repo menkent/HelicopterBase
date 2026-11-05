@@ -111,12 +111,13 @@ export class Heli {
     this.rope.clear();
     const o = this.carried;
     if (o) {
-      const tx = this.x, ty = this.y + 150;
+      const tx = this.x, ty = this.y + 200;
       const a = Math.min(1, dt * 5);
       o.x += (tx - o.x) * a;
       o.y += (ty - o.y) * a;
       if ('rotation' in o) o.rotation = Phaser.Math.Clamp((o.x - this.x) * -0.006, -0.5, 0.5);
-      this.rope.lineStyle(4, 0x8d6e53, 1).lineBetween(this.x, this.y + 20, o.x, o.y - 40);
+      const top = o.displayHeight ? o.displayHeight * 0.4 : 50;
+      this.rope.lineStyle(5, 0x8d6e53, 1).lineBetween(this.x, this.y + 10, o.x, o.y - top);
     }
   }
 }

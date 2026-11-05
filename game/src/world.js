@@ -4,10 +4,11 @@ import { BASE, DEPTH, SITES, WORLD } from './config.js';
 export function buildWorld(scene, missions) {
   const rnd = new Phaser.Math.RandomDataGenerator(['hb-world']);
   const g = scene.add.graphics().setDepth(DEPTH.ground);
-  g.fillStyle(0xdde6c8, 1).fillRect(0, 0, WORLD.w, WORLD.h);
-  for (let i = 0; i < 140; i++) {
+  const P = WORLD.pad;
+  g.fillStyle(0xdde6c8, 1).fillRect(-P, -P, WORLD.w + 2 * P, WORLD.h + 2 * P);
+  for (let i = 0; i < 220; i++) {
     g.fillStyle(i % 3 ? 0xe5ecd3 : 0xd3dfba, 1)
-      .fillEllipse(rnd.between(0, WORLD.w), rnd.between(0, WORLD.h), rnd.between(180, 460), rnd.between(110, 280));
+      .fillEllipse(rnd.between(-P, WORLD.w + P), rnd.between(-P, WORLD.h + P), rnd.between(180, 460), rnd.between(110, 280));
   }
 
   // тропинки-точки от базы к каждому месту
@@ -38,8 +39,8 @@ export function buildWorld(scene, missions) {
     for (const pt of pathPts) if (Math.hypot(x - pt.x, y - pt.y) < 90) return false;
     return true;
   };
-  for (let i = 0, placed = 0; i < 2000 && placed < 230; i++) {
-    const x = rnd.between(60, WORLD.w - 60), y = rnd.between(60, WORLD.h - 60);
+  for (let i = 0, placed = 0; i < 4000 && placed < 380; i++) {
+    const x = rnd.between(-P + 60, WORLD.w + P - 60), y = rnd.between(-P + 60, WORLD.h + P - 60);
     if (!free(x, y)) continue;
     scene.add.image(x, y, rnd.pick(['tree_top', 'tree_top2'])).setDepth(DEPTH.decor).setDisplaySize(...Array(2).fill(rnd.between(90, 150)));
     placed++;
