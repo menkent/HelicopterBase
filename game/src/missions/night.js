@@ -232,6 +232,7 @@ export default {
     };
 
     ctx.pointAt(null);
+    let searchT = 0, helped = false;
 
     return {
       update(dt) {
@@ -260,8 +261,11 @@ export default {
 
         // подсказки: периодически глазки-ушки и шевеление нужного куста
         hintT -= dt;
+        searchT += dt;
+        // долго не находит (4 года!) — подсказываем чаще и показываем стрелку
+        if (searchT > 12 && !helped) { helped = true; ctx.pointAt({ x: target.x, y: target.y }); }
         if (hintT <= 0 && !peeked) {
-          hintT = 3.2;
+          hintT = helped ? 1.8 : 3.2;
           tw.killTweensOf(peek);
           peek.setScale(peekScale * 0.9);
           tw.add({ targets: peek, alpha: 1, scale: peekScale, duration: 350, ease: 'Back.easeOut', hold: 1300, yoyo: true });

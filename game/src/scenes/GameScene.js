@@ -11,7 +11,9 @@ import * as Save from '../save.js';
 
 const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 const inBase = (x, y) => x >= BASE.x && x <= BASE.x + BASE.w && y >= BASE.y && y <= BASE.y + BASE.h;
-const BASE_INNER = { x: BASE.x + 90, y: BASE.y + 90, w: BASE.w - 180, h: BASE.h - 180 };
+// с запасом: чтобы камера не дёргалась, когда вертолёт «елозит» у края базы
+const inBaseM = (x, y, m) => x >= BASE.x - m && x <= BASE.x + BASE.w + m && y >= BASE.y - m && y <= BASE.y + BASE.h + m;
+const BASE_INNER = { x: BASE.x + 90, y: BASE.y + 140, w: BASE.w - 180, h: BASE.h - 230 };
 
 /*
  Этапы (this.state):
@@ -139,7 +141,7 @@ export class GameScene extends Phaser.Scene {
     let guide = null;
     switch (this.state) {
       case 'title':
-        if (this.stateT > 0.5 && this.inp.actionPressed()) {
+        if (this.stateT > 0.8 && this.inp.actionPressed()) {
           sfx.unlock(); sfx.click();
           this.hud.hideDispatch();
           this.toDispatch();
@@ -151,7 +153,7 @@ export class GameScene extends Phaser.Scene {
           this.callT += dt;
           if (this.callT > 1.6) { this.callT = 0; sfx.call(); }
         }
-        if (this.stateT > 0.6 && this.inp.actionPressed()) {
+        if (this.stateT > (this.dispatchStep === 2 ? 1.4 : 1.0) && this.inp.actionPressed()) {
           this.dispatchStep += 1;
           this.stateT = 0;
           if (this.dispatchStep < 3) {
@@ -218,14 +220,20 @@ export class GameScene extends Phaser.Scene {
       sfx.ready();
     }
     if (this.ready && !inBase(h.x, h.y)) this.toFlight();
-    this.storeBlink.clear();
+    // куда лететь на базе: мигающая рамка + стрелка сбоку, которая на неё светит
+    const g = this.storeBlink.clear();
+    const a = 0.45 + 0.55 * Math.abs(Math.sin(this.stateT * 4));
     if (!this.item) {
-      const a = 0.35 + 0.65 * Math.abs(Math.sin(this.stateT * 4));
       const r = WAREHOUSE.rect;
-      this.storeBlink.lineStyle(16, 0xffd43b, a).strokeRoundedRect(r.x - 10, r.y - 10, r.w + 20, r.h + 20, 26);
-      return null;
+      g.lineStyle(30, 0xffffff, a).strokeRoundedRect(r.x - 14, r.y - 14, r.w + 28, r.h + 28, 30);
+      g.lineStyle(18, 0xff922b, a).strokeRoundedRect(r.x - 14, r.y - 14, r.w + 28, r.h + 28, 30);
+      return { x: r.x + r.w + 20, y: r.y + r.h / 2, side: 'right' };
     }
-    if (this.fuel < 1) return FUEL;
+    if (this.fuel < 1) {
+      g.lineStyle(30, 0xffffff, a).strokeCircle(FUEL.x, FUEL.y, FUEL.r + 34);
+      g.lineStyle(18, 0xff922b, a).strokeCircle(FUEL.x, FUEL.y, FUEL.r + 34);
+      return { x: FUEL.x - FUEL.r - 40, y: FUEL.y, side: 'left' };
+    }
     return SITES[this.missionId];
   }
 
@@ -267,7 +275,7 @@ export class GameScene extends Phaser.Scene {
       if (dist(h.x, h.y, site.x, site.y) < site.r) this.enterSite();
       return site;
     }
-    if (inBase(h.x, h.y)) this.toHome();
+    if (inBaseM(h.x, h.y, -60)) this.toHome();
     return PAD;
   }
 
@@ -336,7 +344,7 @@ export class GameScene extends Phaser.Scene {
 
   updateHome() {
     const h = this.heli;
-    if (!inBase(h.x, h.y)) { this.toFlight(); return PAD; }
+    if (!inBaseM(h.x, h.y, 160)) { this.toFlight(); return PAD; }
     if (h.flying && dist(h.x, h.y, PAD.x, PAD.y) < 80) {
       this.setState('landing');
       h.land(PAD.x, PAD.y, () => this.reward());
@@ -348,6 +356,7 @@ export class GameScene extends Phaser.Scene {
     this.setState('reward');
     sfx.fanfare();
     const id = this.missionId;
+    this.resetSlots();
     const patient = this.heli.releaseCarried();
     if (patient) this.toHospital(patient);
     this.hud.showReward(id);
@@ -431,7 +440,7 @@ export class GameScene extends Phaser.Scene {
     if (showSite) {
       const k = 1 + 0.04 * Math.sin(t * 4);
       this.siteRing.lineStyle(18, this.meta.color, 0.55).strokeCircle(site.x, site.y, site.r * k);
-      this.siteIcon.setTexture('medal_' + this.missionId).setPosition(site.x, site.y - site.r - 60 + Math.sin(t * 3) * 14)
+      this.siteIcon.setTexture('medal_' + this.missionId).setPosition(site.x, site.y - site.r + 150 + Math.sin(t * 3) * 14)
         .setDisplaySize(220, 220).setVisible(true);
     } else this.siteIcon.setVisible(false);
     this.padRing.clear();

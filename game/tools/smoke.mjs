@@ -1,6 +1,6 @@
 // Дымовой тест полного цикла: диспетчер -> склад (сначала не тот предмет) -> заправка -> вылет -> миссия -> домой -> медаль.
 // node smoke.mjs <mission> <outdir>
-import { openGame, solveMission } from './hb.mjs';
+import { openGame, solveMission, tapUntilState } from './hb.mjs';
 import fs from 'node:fs';
 
 const id = process.argv[2] || 'fire';
@@ -10,7 +10,7 @@ const g = await openGame({ query: `test=1&mission=${id}` });
 const step = async (name) => { await g.shot(`${out}/${name}.png`); console.log('state', name, await g.hb('__hb.state()'), JSON.stringify(await g.hb('__hb.heli()'))); };
 try {
   await g.wait(800); await step('01-dispatch');
-  for (let i = 0; i < 20 && (await g.hb('__hb.state()')) !== 'prep'; i++) { await g.hb('__hb.tap()'); await g.wait(300); }
+  await tapUntilState(g, 'prep', 80);
   const need = await g.ev(() => window.__hb.scene.meta.item);
   const slots = await g.ev(() => window.__hb.warehouse.slots);
   const wrong = slots.find((s) => s.key !== need), right = slots.find((s) => s.key === need);

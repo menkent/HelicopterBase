@@ -277,11 +277,21 @@ export class HudScene extends Phaser.Scene {
     const now = this.time.now / 1000;
     const m = 110;
     this.arrow.setVisible(true);
-    if (sx > m && sx < VIEW.w - m && sy > m + 80 && sy < VIEW.h - m) {
+    const TOP = 250; // ниже панелей HUD
+    this.arrow.setDisplaySize(160, 96);
+    if (t.side) {
+      // стрелка сбоку от цели, смотрит на неё и покачивается
+      const bob = Math.abs(Math.sin(now * 5)) * 30;
+      const dir = t.side === 'right' ? 1 : -1;
+      this.arrow.setVisible(true).setPosition(sx + dir * (95 + bob), sy).setRotation(t.side === 'right' ? Math.PI : 0);
+      return;
+    }
+    if (sx > m && sx < VIEW.w - m && sy > TOP + 110 && sy < VIEW.h - m) {
       this.arrow.setPosition(sx, sy - 110 - Math.abs(Math.sin(now * 5)) * 30).setRotation(Math.PI / 2);
     } else {
-      const cx = VIEW.w / 2, cy = VIEW.h / 2, dx = sx - cx, dy = sy - cy;
-      const k = Math.min((cx - m) / Math.abs(dx || 1e-6), (cy - m) / Math.abs(dy || 1e-6));
+      // центр «рамки» стрелок смещён вниз, чтобы верхний край был ниже панелей
+      const cx = VIEW.w / 2, cy = (TOP + VIEW.h - m) / 2, dx = sx - cx, dy = sy - cy;
+      const k = Math.min((cx - m) / Math.abs(dx || 1e-6), (cy - TOP) / Math.abs(dy || 1e-6));
       const p = 1 + 0.12 * Math.sin(now * 6);
       this.arrow.setPosition(cx + dx * k, cy + dy * k).setRotation(Math.atan2(dy, dx));
       this.arrow.setDisplaySize(160 * p, 96 * p);
