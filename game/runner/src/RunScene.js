@@ -5,28 +5,46 @@ import { sfx } from '../../src/sfx.js';
 import { ANIMAL_KEYS } from './art.js';
 import { LaneInput } from './input.js';
 
-export const VIEW = { w: 1920, h: 1080 };
+// Кадр подстраивается под пропорции экрана: короткая сторона всегда 1080.
+// Альбомный (компьютер, телевизор, телефон боком) и портретный (телефон вертикально) — со своей камерой.
+export const VIEW = { w: 1920, h: 1080, portrait: false };
 
 // ---------- псевдо-3D: камера сзади-сверху, мир в метрах ----------
-const CX = VIEW.w / 2, CY = 580, F = 780; // центр кадра и фокус
-const PITCH = (18 * Math.PI) / 180; // камера наклонена вниз
-const SIN = Math.sin(PITCH), COS = Math.cos(PITCH);
-const HOR = CY - F * Math.tan(PITCH); // линия горизонта на экране
-const CAMH = 8; // высота камеры над землёй
-const HZ = 13, ALT = 3.6; // вертолёт: на сколько впереди камеры и на какой высоте
+let F, PITCH, SIN, COS; // фокус и наклон камеры вниз
+let CX, CY, HOR; // центр кадра и линия горизонта на экране
+let CAMH; // высота камеры над землёй
+let HZ; // на сколько впереди камеры летит вертолёт
+const ALT = 3.6; // высота полёта
+let HK; // масштаб вертолёта на экране: корпус ~3.3 м шириной
+
+/** aspect = ширина / высота окна */
+export function setLayout(aspect) {
+  const portrait = aspect < 0.95;
+  const clamp = (v, a, b) => Math.round(Math.min(b, Math.max(a, v)));
+  Object.assign(VIEW, portrait ? { w: 1080, h: clamp(1080 / aspect, 1600, 2400), portrait } : { w: clamp(1080 * aspect, 1440, 2400), h: 1080, portrait });
+  // на телефоне вертикально камера круче и ближе: три полосы во всю ширину, вертолёт на 2/3 высоты
+  const cam = portrait ? { deg: 36, F: 1055, CAMH: 12, HZ: 10, hor: 0.3 * VIEW.h } : { deg: 18, F: 780, CAMH: 8, HZ: 13, hor: null };
+  PITCH = (cam.deg * Math.PI) / 180; SIN = Math.sin(PITCH); COS = Math.cos(PITCH);
+  F = cam.F; CAMH = cam.CAMH; HZ = cam.HZ;
+  CX = VIEW.w / 2;
+  CY = cam.hor === null ? 580 : cam.hor + F * Math.tan(PITCH);
+  HOR = CY - F * Math.tan(PITCH);
+  HK = (3.3 * proj(0, ALT, HZ, 0).s) / 290;
+}
 const LW = 5.5; // ширина полосы
-const ZNEAR = 4, ZMAX = 240;
+const ZNEAR = 1.5, ZMAX = 240;
 const BAND = 6; // полосы-«шпалы» на земле, дают ощущение скорости
 const SEG = 420; // длина участка «море»/«суша»
 const APPROACH = 22; // за сколько метров до зверька начинает спускаться круг/крюк
 const GOAL = 10; // столько зверят спасти за полёт
 const SPEED0 = 15, SPEED_MAX = 22;
 
-const proj = (x, y, z, camX) => {
+function proj(x, y, z, camX) {
   const yr = y - CAMH;
   const s = F / (z * COS - yr * SIN);
   return { sx: CX + (x - camX) * s, sy: CY - (yr * COS + z * SIN) * s, s };
-};
+}
+setLayout(16 / 9);
 const biomeAt = (d) => (Math.floor(d / SEG) % 2 === 0 ? 'sea' : 'land');
 const nearShore = (d, m) => { const r = ((d % SEG) + SEG) % SEG; return r < m || r > SEG - m; };
 
@@ -41,15 +59,13 @@ const mix = (a, b, t) => {
   return (Math.round(r) << 16) | (Math.round(g) << 8) | Math.round(bl);
 };
 const TXT = (size, color = '#3b3640') => ({ fontFamily: FONT, fontSize: `${size}px`, fontStyle: 'bold', color });
-// масштаб вертолёта на экране: корпус ~3.3 м шириной
-const HK = (3.3 * proj(0, ALT, HZ, 0).s) / 290;
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 export class RunScene extends Phaser.Scene {
   constructor() { super('run'); }
 
-  create() {
+  create(data = {}) {
     sfx.setMuted(TEST);
     this.inp = new LaneInput(this, VIEW.w);
     this.drawSky();
@@ -81,7 +97,23 @@ export class RunScene extends Phaser.Scene {
     this.buildHud();
     this.resetRun();
     this.setState('title');
+    if (data.keep) this.restore(data.keep);
     this.installDebug();
+  }
+
+  /** Повернули телефон: пересобрать сцену под новый кадр, сохранив спасённых и звёзды. */
+  relayout() {
+    const keep = { state: this.state, rescuedList: this.rescuedList, stars: this.stars, speed: this.speed };
+    this.scene.restart({ keep });
+  }
+
+  restore(k) {
+    this.rescuedList = k.rescuedList; this.rescued = k.rescuedList.length;
+    this.stars = k.stars; this.speed = k.speed;
+    this.refreshHud();
+    if (k.state === 'finish') this.fillFinish();
+    this.setState(k.state);
+    this.stateAt -= 900; // сразу принимать нажатия
   }
 
   // ---------- мир ----------
@@ -207,12 +239,12 @@ export class RunScene extends Phaser.Scene {
     if (this.state === 'title') {
       if (ev.length && canPress) this.startRun();
       this.travel += 8 * dt;
-      this.titleHeli.y = 470 + Math.sin(this.t * 2.2) * 16;
+      this.titleHeli.y = this.titleY + Math.sin(this.t * 2.2) * 16;
       this.titleHeli.rotation = Math.sin(this.t * 1.3) * 0.04;
     } else if (this.state === 'finish') {
       if (ev.length && canPress) this.startRun();
       this.travel += 8 * dt;
-      this.finishHeli.y = 360 + Math.sin(this.t * 2.2) * 14;
+      this.finishHeli.y = this.finishY + Math.sin(this.t * 2.2) * 14;
     } else {
       for (const dir of ev) {
         if (dir === 0) continue;
@@ -301,7 +333,7 @@ export class RunScene extends Phaser.Scene {
         e.img.setAlpha(fade * (z < 14 ? Math.max(0, (z - 4) / 10) : 0.92));
       } else if (e.kind === 'target') {
         const bob = Math.sin(this.t * 6 + e.d) * 0.04;
-        if (z < HZ + APPROACH) e.img.setDepth(100000 - HZ * 100 + 2);
+        if (z < HZ + APPROACH && p.sy > this.heliScreen().belly + 40) e.img.setDepth(100000 - HZ * 100 + 2);
         e.img.setRotation(e.state === 'live' ? bob : 0);
         if (e.sos) {
           e.sos.setVisible(e.state === 'live' && z > HZ + 10).setPosition(p.sx + e.w * p.s * 0.28, p.sy - e.h * p.s * 0.92 + Math.sin(this.t * 5) * 6)
@@ -420,7 +452,8 @@ export class RunScene extends Phaser.Scene {
         this.ropeTool = next.biome === 'sea' ? 'buoy' : 'hook';
         // круг/крюк тянется прямо к зверьку: к поясу на плоту, к макушке на скале
         const p = proj(next.x, 0, z, this.camX);
-        this.ropeAim = { x: p.sx, y: p.sy - next.h * p.s * (next.biome === 'sea' ? 0.3 : 0.72) };
+        // трос только опускается: пока зверёк на экране выше брюха (крутая камера на телефоне), круг висит под вертолётом
+        this.ropeAim = { x: p.sx, y: Math.max(hs.belly + 90, p.sy - next.h * p.s * (next.biome === 'sea' ? 0.3 : 0.72)) };
       }
     }
     if (lifting && lifting.liftTop) {
@@ -473,7 +506,7 @@ export class RunScene extends Phaser.Scene {
   finish() {
     this.trail.emitting = false;
     sfx.celebrate();
-    this.sparks.explode(120, CX, 420);
+    this.sparks.explode(120, CX, VIEW.h * 0.4);
     this.time.delayedCall(700, () => {
       this.fillFinish();
       this.setState('finish');
@@ -484,7 +517,7 @@ export class RunScene extends Phaser.Scene {
   drawSky() {
     const g = this.add.graphics().setDepth(0);
     g.fillGradientStyle(0x74c0fc, 0x74c0fc, COLORS.fog, COLORS.fog, 1).fillRect(0, 0, VIEW.w, HOR + 2);
-    this.add.image(1520, 120, 'sun').setDisplaySize(170, 170).setDepth(0);
+    this.add.image(VIEW.portrait ? VIEW.w - 170 : VIEW.w - 400, VIEW.portrait ? 330 : 120, 'sun').setDisplaySize(170, 170).setDepth(0);
     // дальние горы на горизонте
     const m = this.add.graphics().setDepth(0);
     m.fillStyle(0xb8c9dd, 1);
@@ -499,7 +532,9 @@ export class RunScene extends Phaser.Scene {
     const g = this.add.graphics();
     const w = 40 + GOAL * 82;
     g.fillStyle(0xffffff, 0.9).fillRoundedRect(24, 20, w, 110, 34).lineStyle(4, 0xffc9de, 1).strokeRoundedRect(24, 20, w, 110, 34);
-    g.fillStyle(0xffffff, 0.9).fillRoundedRect(VIEW.w - 264, 20, 240, 110, 34).lineStyle(4, 0xffe066, 1).strokeRoundedRect(VIEW.w - 264, 20, 240, 110, 34);
+    // звёзды: справа сверху, а на телефоне — под рядом зверят
+    const sx = VIEW.portrait ? 24 : VIEW.w - 264, sy = VIEW.portrait ? 146 : 20;
+    g.fillStyle(0xffffff, 0.9).fillRoundedRect(sx, sy, 240, 110, 34).lineStyle(4, 0xffe066, 1).strokeRoundedRect(sx, sy, 240, 110, 34);
     this.hudBox.add(g);
     this.slots = []; this.slotImgs = [];
     for (let i = 0; i < GOAL; i++) {
@@ -510,24 +545,28 @@ export class RunScene extends Phaser.Scene {
       this.slotImgs.push(img);
       this.hudBox.add([c, img]);
     }
-    this.starIcon = this.add.image(VIEW.w - 200, 75, 'star').setDisplaySize(76, 76);
-    this.starText = this.add.text(VIEW.w - 150, 75, '0', TXT(60)).setOrigin(0, 0.5);
+    this.starIcon = this.add.image(sx + 64, sy + 55, 'star').setDisplaySize(76, 76);
+    this.starText = this.add.text(sx + 114, sy + 55, '0', TXT(60)).setOrigin(0, 0.5);
     this.hudBox.add([this.starIcon, this.starText]);
 
     // заставка
     this.titleBox = this.add.container(0, 0).setDepth(200000);
     const tg = this.add.graphics().fillStyle(0xffffff, 0.55).fillRect(0, 0, VIEW.w, VIEW.h);
-    this.titleHeli = this.add.image(CX, 470, 'heli_front').setDisplaySize(420, 420);
-    const title = this.add.text(CX, 150, 'Спасательный полёт', TXT(96, '#d63384')).setOrigin(0.5).setStroke('#ffffff', 14);
+    const P = VIEW.portrait;
+    const ty = (P ? [300, 820, 1330, 1560] : [150, 470, 800, 960]).map((y) => (y * VIEW.h) / (P ? 1920 : 1080)); // заголовок, вертолёт, стрелки, «нажми»
+    this.titleY = ty[1];
+    this.titleHeli = this.add.image(CX, ty[1], 'heli_front').setDisplaySize(P ? 560 : 420, P ? 560 : 420);
+    const title = this.add.text(CX, ty[0], P ? 'Спасательный\nполёт' : 'Спасательный полёт', TXT(P ? 110 : 96, '#d63384'))
+      .setOrigin(0.5).setAlign('center').setLineSpacing(-10).setStroke('#ffffff', 14);
     const arrows = this.add.graphics();
     for (const dir of [-1, 1]) {
-      const x0 = CX + dir * 380, y0 = 800;
+      const x0 = CX + dir * 380, y0 = ty[2];
       const pts = [[-70, -34], [14, -34], [14, -76], [90, 0], [14, 76], [14, 34], [-70, 34]].map(([x, y]) => ({ x: x0 + dir * x, y: y0 + y }));
       arrows.fillStyle(0xffd43b, 1).lineStyle(10, 0xe8590c, 1).fillPoints(pts, true).strokePoints(pts, true);
     }
     const lanes = this.add.graphics();
-    for (let i = 0; i < 3; i++) lanes.fillStyle(i === 1 ? 0xff5fae : 0xffffff, 1).lineStyle(6, 0xd63384, 1).fillRoundedRect(CX - 165 + i * 115, 750, 100, 100, 22).strokeRoundedRect(CX - 165 + i * 115, 750, 100, 100, 22);
-    const go = this.add.text(CX, 960, 'Нажми любую кнопку!', TXT(56, '#3b3640')).setOrigin(0.5).setStroke('#ffffff', 10);
+    for (let i = 0; i < 3; i++) lanes.fillStyle(i === 1 ? 0xff5fae : 0xffffff, 1).lineStyle(6, 0xd63384, 1).fillRoundedRect(CX - 165 + i * 115, ty[2] - 50, 100, 100, 22).strokeRoundedRect(CX - 165 + i * 115, ty[2] - 50, 100, 100, 22);
+    const go = this.add.text(CX, ty[3], P ? 'Нажми, чтобы лететь!' : 'Нажми любую кнопку!', TXT(56, '#3b3640')).setOrigin(0.5).setStroke('#ffffff', 10);
     this.tweens.add({ targets: go, scale: 1.08, yoyo: true, repeat: -1, duration: 600 });
     this.titleBox.add([tg, title, this.titleHeli, arrows, lanes, go]);
 
@@ -549,18 +588,26 @@ export class RunScene extends Phaser.Scene {
     b.removeAll(true);
     const g = this.add.graphics();
     g.fillStyle(0xffffff, 0.6).fillRect(0, 0, VIEW.w, VIEW.h);
-    g.fillStyle(0xffffff, 1).fillRoundedRect(260, 120, 1400, 840, 60).lineStyle(10, 0xff5fae, 1).strokeRoundedRect(260, 120, 1400, 840, 60);
-    this.finishHeli = this.add.image(CX, 360, 'heli_front').setDisplaySize(340, 340);
+    const P = VIEW.portrait;
+    // y: вертолёт, надпись, зверята, звёзды, «ещё раз»; на телефоне зверята в два ряда по 5
+    const dy = (VIEW.h - (P ? 1920 : 1080)) / 2; // панель по центру по высоте
+    const fy = (P ? [560, 860, 1010, 1330, 1640] : [360, 580, 710, 840, 1020]).map((y) => y + dy);
+    const box = P ? [60, 260 + dy, VIEW.w - 120, 1200] : [CX - 700, 120 + dy, 1400, 840];
+    g.fillStyle(0xffffff, 1).fillRoundedRect(...box, 60).lineStyle(10, 0xff5fae, 1).strokeRoundedRect(...box, 60);
+    this.finishY = fy[0];
+    this.finishHeli = this.add.image(CX, fy[0], 'heli_front').setDisplaySize(340, 340);
     b.add([g, this.finishHeli]);
-    b.add(this.add.text(CX, 580, 'Ура! Все спасены!', TXT(80, '#d63384')).setOrigin(0.5));
+    b.add(this.add.text(CX, fy[1], P ? 'Ура!\nВсе спасены!' : 'Ура! Все спасены!', TXT(80, '#d63384')).setOrigin(0.5).setAlign('center'));
     this.rescuedList.forEach((a, i) => {
-      const img = this.add.image(CX - 4.5 * 120 + i * 120, 710, `face_${a}`).setDisplaySize(104, 104).setScale(0);
+      const per = P ? 5 : 10, col = i % per, row = Math.floor(i / per);
+      const x = CX - ((per - 1) / 2) * (P ? 170 : 120) + col * (P ? 170 : 120);
+      const img = this.add.image(x, fy[2] + row * 150, `face_${a}`).setDisplaySize(104, 104).setScale(0);
       b.add(img);
       this.tweens.add({ targets: img, scale: (104 / img.width), delay: 200 + i * 120, duration: 300, ease: 'Back.easeOut', onStart: () => sfx.pop() });
     });
-    b.add(this.add.image(CX - 60, 840, 'star').setDisplaySize(80, 80));
-    b.add(this.add.text(CX - 6, 840, String(this.stars), TXT(64)).setOrigin(0, 0.5));
-    const again = this.add.text(CX, 1020, 'Ещё раз — любая кнопка', TXT(48, '#3b3640')).setOrigin(0.5).setStroke('#ffffff', 10);
+    b.add(this.add.image(CX - 60, fy[3], 'star').setDisplaySize(80, 80));
+    b.add(this.add.text(CX - 6, fy[3], String(this.stars), TXT(64)).setOrigin(0, 0.5));
+    const again = this.add.text(CX, fy[4], P ? 'Нажми — ещё раз' : 'Ещё раз — любая кнопка', TXT(48, '#3b3640')).setOrigin(0.5).setStroke('#ffffff', 10);
     b.add(again);
     this.tweens.add({ targets: again, scale: 1.06, yoyo: true, repeat: -1, duration: 600 });
   }

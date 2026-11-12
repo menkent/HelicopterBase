@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#74c0fc">
 <title>Вертолётные игры</title>
 <style>
   html,body{margin:0;height:100%}
@@ -20,6 +21,17 @@
   .hint{font-size:min(2.4vw,3.4vh);font-weight:bold;color:#3b3640;background:#fff9;padding:.6vmin 2.4vmin;border-radius:4vmin}
   .back{position:fixed;left:2vmin;bottom:2vmin;font-size:2.2vmin;color:#2b5a2b}
   .heli{position:fixed;width:12vmin;top:4vh;left:-15vmin;animation:fly 14s linear infinite}
+  /* телефон вертикально: карточки одна под другой, крупнее */
+  @media (orientation: portrait){
+    body{gap:3vh}
+    h1{font-size:10vw}
+    .games{flex-direction:column;gap:3vh;align-items:center}
+    .card{width:min(84vw,52vh)}
+    .card b{font-size:6.5vw}
+    .card span{font-size:3.6vw}
+  }
+  /* на сенсорном экране подсказка про кнопки не нужна */
+  @media (pointer: coarse){ .hint{display:none} .card.sel{transform:none} }
   @keyframes fly{0%{left:-15vmin;transform:translateY(0)}50%{transform:translateY(3vh)}100%{left:105vw;transform:translateY(0)}}
 </style>
 </head>

@@ -1,8 +1,16 @@
 // Ввод раннера: только «влево» / «вправо» (+ «любая кнопка» для меню).
-// Геймпад: крестовина, стик, LB/RB, LT/RT, X — влево, B — вправо. Клавиатура: ←/→, A/D. Тач/мышь: левая/правая половина экрана.
+// Геймпад: крестовина, стик, LB/RB, LT/RT, X — влево, B — вправо. Клавиатура: ←/→, A/D. Тач/мышь: свайп или тап по левой/правой половине экрана.
 const LEFT_BTN = [14, 4, 6, 2];
 const RIGHT_BTN = [15, 5, 7, 1];
 const STICK_ON = 0.55, STICK_OFF = 0.3;
+const SWIPE = 60; // пикселей кадра — дальше это уже свайп, а не тап
+
+/** На телефоне — во весь экран с первого касания (Android; на iPhone — через «На экран Домой»). */
+function goFullscreen() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || !el.requestFullscreen) return;
+  el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+}
 
 export class LaneInput {
   constructor(scene, viewW) {
@@ -14,7 +22,22 @@ export class LaneInput {
       else if (e.code === 'ArrowRight' || e.code === 'KeyD') this.events.push(1);
       else this.events.push(0);
     });
-    scene.input.on('pointerdown', (p) => this.events.push(p.x < viewW / 2 ? -1 : 1));
+    // тач/мышь: свайп влево/вправо (как в Subway Surfers) или тап по левой/правой половине экрана
+    this.touch = null;
+    scene.input.on('pointerdown', (p) => {
+      this.touch = { x: p.x, done: false };
+      if (p.wasTouch) goFullscreen();
+    });
+    scene.input.on('pointermove', (p) => {
+      const t = this.touch;
+      if (!t || t.done || !p.isDown || Math.abs(p.x - t.x) < SWIPE) return;
+      t.done = true;
+      this.events.push(Math.sign(p.x - t.x));
+    });
+    scene.input.on('pointerup', (p) => {
+      if (this.touch && !this.touch.done) this.events.push(p.x < viewW / 2 ? -1 : 1);
+      this.touch = null;
+    });
   }
 
   poll() {

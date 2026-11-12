@@ -1,7 +1,7 @@
 import { FONT } from '../../src/config.js';
 import { installMenuExit } from '../../src/menuExit.js';
 import { loadAll } from './art.js';
-import { RunScene, VIEW } from './RunScene.js';
+import { RunScene, VIEW, setLayout } from './RunScene.js';
 
 class BootScene extends Phaser.Scene {
   constructor() { super('boot'); }
@@ -18,7 +18,12 @@ class BootScene extends Phaser.Scene {
 
 installMenuExit();
 
-new Phaser.Game({
+// кадр под пропорции окна; при повороте/заметном изменении окна сцена перестраивается
+const aspect = () => innerWidth / innerHeight;
+let cur = aspect();
+setLayout(cur);
+
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   width: VIEW.w,
   height: VIEW.h,
@@ -27,4 +32,18 @@ new Phaser.Game({
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   input: { gamepad: false },
   scene: [BootScene, RunScene],
+});
+
+let timer = 0;
+addEventListener('resize', () => {
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    const a = aspect();
+    if (Math.abs(a - cur) / cur < 0.04) return;
+    cur = a;
+    setLayout(a);
+    game.scale.setGameSize(VIEW.w, VIEW.h);
+    const run = game.scene.getScene('run');
+    if (run && run.sys.isActive()) run.relayout();
+  }, 150);
 });
