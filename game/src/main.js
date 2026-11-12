@@ -3,6 +3,9 @@ import './missions/index.js'; // миссии регистрируют свои 
 import { BootScene } from './scenes/BootScene.js';
 import { GameScene } from './scenes/GameScene.js';
 import { HudScene } from './scenes/HudScene.js';
+import { installMenuExit } from './menuExit.js';
+
+installMenuExit();
 
 new Phaser.Game({
   type: Phaser.AUTO,

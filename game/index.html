@@ -2,12 +2,90 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>База спасения</title>
-<style>html,body{margin:0;height:100%;background:#cfdcb5;overflow:hidden;cursor:none}#game{width:100%;height:100%}</style>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Вертолётные игры</title>
+<style>
+  html,body{margin:0;height:100%}
+  body{font-family:'PT Sans','Helvetica Neue',Arial,sans-serif;color:#3b3640;overflow:hidden;
+    background:linear-gradient(#74c0fc,#d0ebff 55%,#c3e8a6 55%,#a9d98a);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4vh}
+  h1{margin:0;font-size:min(9vw,11vh);color:#d63384;text-shadow:0 0 .12em #fff,0 0 .12em #fff,0 .08em 0 #fff}
+  .games{display:flex;gap:4vw;justify-content:center;flex-wrap:wrap;padding:0 3vw}
+  .card{display:block;width:min(40vw,62vh);background:#fff;border-radius:3vmin;padding:1.6vmin;text-decoration:none;color:inherit;
+    border:1vmin solid #fff;box-shadow:0 1vmin 3vmin #0003;transition:transform .15s,border-color .15s}
+  .card img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:2vmin}
+  .card b{display:block;text-align:center;font-size:min(4.2vw,6vh);margin:1.4vmin 0 .4vmin}
+  .card span{display:block;text-align:center;font-size:min(2vw,2.8vh);color:#868e96}
+  .card.sel{border-color:#ff5fae;transform:scale(1.06);box-shadow:0 0 0 1vmin #ffd43b,0 1.4vmin 4vmin #0004}
+  .hint{font-size:min(2.4vw,3.4vh);font-weight:bold;color:#3b3640;background:#fff9;padding:.6vmin 2.4vmin;border-radius:4vmin}
+  .back{position:fixed;left:2vmin;bottom:2vmin;font-size:2.2vmin;color:#2b5a2b}
+  .heli{position:fixed;width:12vmin;top:4vh;left:-15vmin;animation:fly 14s linear infinite}
+  @keyframes fly{0%{left:-15vmin;transform:translateY(0)}50%{transform:translateY(3vh)}100%{left:105vw;transform:translateY(0)}}
+</style>
 </head>
 <body>
-<div id="game"></div>
-<script src="lib/phaser.min.js"></script>
-<script type="module" src="src/main.js"></script>
+<svg class="heli" viewBox="0 0 200 120" aria-hidden="true">
+  <rect x="40" y="6" width="130" height="10" rx="5" fill="#ff5fae" stroke="#d63384" stroke-width="3"/>
+  <rect x="98" y="14" width="10" height="16" fill="#d63384"/>
+  <rect x="10" y="50" width="70" height="14" rx="7" fill="#ff5fae" stroke="#d63384" stroke-width="3"/>
+  <rect x="2" y="34" width="14" height="30" rx="5" fill="#ff5fae" stroke="#d63384" stroke-width="3"/>
+  <ellipse cx="118" cy="60" rx="56" ry="34" fill="#ff5fae" stroke="#d63384" stroke-width="4"/>
+  <path d="M68 70 C80 96 160 96 172 68 C150 84 90 84 68 70Z" fill="#fff"/>
+  <rect x="130" y="40" width="40" height="26" rx="12" fill="#a61e70"/><rect x="134" y="44" width="32" height="18" rx="8" fill="#fde4f2"/>
+  <circle cx="156" cy="53" r="6" fill="#c2255c"/><circle cx="158" cy="51" r="2" fill="#fff"/>
+  <path d="M96 94 V108 M140 94 V108 M80 110 H160" stroke="#d63384" stroke-width="6" stroke-linecap="round"/>
+</svg>
+
+<h1>Вертолётные игры</h1>
+<div class="games">
+  <a class="card" href="base/"><img src="menu/base.jpg" alt=""><b>База спасения</b><span>задания диспетчера, склад, заправка, 5 миссий</span></a>
+  <a class="card" href="runner/"><img src="menu/runner.jpg" alt=""><b>Спасательный полёт</b><span>лети и спасай зверят — только влево/вправо</span></a>
+</div>
+<div class="hint">← → выбрать · любая кнопка — играть</div>
+<a class="back" href="../">бумажная база и инструкции</a>
+
+<script>
+// Выбор игры: геймпад (крестовина/стик/LB-RB — выбор, остальные кнопки — играть), клавиатура, мышь/тач.
+const cards = [...document.querySelectorAll('.card')];
+const KEY = 'hb-menu-last';
+let sel = Math.min(cards.length - 1, Math.max(0, +localStorage.getItem(KEY) || 0));
+const show = () => cards.forEach((c, i) => c.classList.toggle('sel', i === sel));
+const move = (d) => { sel = (sel + d + cards.length) % cards.length; show(); };
+const go = () => { localStorage.setItem(KEY, sel); location.href = cards[sel].getAttribute('href'); };
+cards.forEach((c, i) => {
+  c.addEventListener('mouseenter', () => { sel = i; show(); });
+  c.addEventListener('click', () => localStorage.setItem(KEY, i));
+});
+addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA' || e.code === 'ArrowUp') move(-1);
+  else if (e.code === 'ArrowRight' || e.code === 'KeyD' || e.code === 'ArrowDown') move(1);
+  else if (e.code === 'Enter' || e.code === 'Space') go();
+});
+const LEFT = [14, 4, 6, 12], RIGHT = [15, 5, 7, 13];
+const prev = new Map(); // первый опрос — только запоминаем: кнопка, зажатая в игре, не срабатывает тут
+function poll() {
+  for (const p of navigator.getGamepads ? navigator.getGamepads() : []) {
+    if (!p) continue;
+    const now = p.buttons.map((b) => b.pressed);
+    const ax = p.axes[0] || 0;
+    const stick = Math.abs(ax) > 0.55 ? Math.sign(ax) : Math.abs(ax) < 0.3 ? 0 : (prev.get(p.index) || {}).stick || 0;
+    const was = prev.get(p.index);
+    if (was) {
+      if (stick && stick !== was.stick) move(stick);
+      now.forEach((on, i) => {
+        if (!on || was.buttons[i] || i === 8) return;
+        if (LEFT.includes(i)) move(-1);
+        else if (RIGHT.includes(i)) move(1);
+        else go();
+      });
+    }
+    prev.set(p.index, { buttons: now, stick });
+  }
+  requestAnimationFrame(poll);
+}
+show();
+requestAnimationFrame(poll);
+</script>
 </body>
 </html>

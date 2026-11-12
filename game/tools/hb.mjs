@@ -10,7 +10,7 @@ export async function openGame({ query = 'test=1', port = 8765, w = 1920, h = 10
   const logs = [];
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(`[${m.type()}] ${m.text()}`); });
   page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
-  await page.goto(`http://localhost:${port}/?${query}`);
+  await page.goto(`http://localhost:${port}/base/?${query}`);
   await page.waitForFunction(() => window.__hb && window.__hb.ready && window.__hb.state() !== 'boot', null, { timeout: 20000 });
   const api = {
     browser, page, logs,
